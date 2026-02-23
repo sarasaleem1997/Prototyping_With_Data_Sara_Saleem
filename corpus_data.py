@@ -21,13 +21,16 @@ Scenario token counts:
   work        210,514 tokens (48,968 lines)
   social      399,780 tokens (101,235 lines)
   housing     212,375 tokens (49,422 lines)
+
+Note: Phrase generation and dialogue are handled by llm_generator.py (Gemini API).
+This module is retained solely for the corpus frequency chart — real linguistic data
+that the LLM cannot replicate.
 """
 
 # ── Per-scenario word frequencies (per 100k words) ─────────────────────────
 # Source: OpenSubtitles v2024 Spanish corpus (opus.nlpl.eu)
 # Pipeline: process_corpus.py — 4,664,874 lines processed,
 #           487,963 lines matched to scenarios (10.5%)
-# Frequencies are real counts normalised per 100k tokens per scenario
 
 CORPUS_FREQUENCIES = {
     "restaurant": {  # 71,579 lines · 287,982 tokens
@@ -181,111 +184,6 @@ CORPUS_FREQUENCIES = {
     },
 }
 
-# ── Phrase difficulty tags ──────────────────────────────────────────────────
-# Format: spanish_phrase -> (grammar_pattern, minimum_level)
-
-PHRASE_DIFFICULTY = {
-    # Restaurant
-    "Una mesa para dos, por favor.":                    ("present_simple", "A1"),
-    "¿Me trae la carta, por favor?":                    ("polite_request", "A1"),
-    "¿Qué recomienda?":                                 ("basic_question", "A1"),
-    "Voy a pedir...":                                   ("future", "A1"),
-    "¿Tiene algo sin gluten / vegetariano?":            ("basic_question", "A2"),
-    "¿Me trae la cuenta, por favor?":                   ("polite_request", "A1"),
-    "Está muy rico, gracias.":                          ("present_simple", "A1"),
-    "¿Puede repetir más despacio?":                     ("polite_request", "A1"),
-    "¿Aceptan tarjeta?":                                ("basic_question", "A1"),
-    "¿Está incluido el servicio?":                      ("basic_question", "A2"),
-    # Transport
-    "¿Me lleva a esta dirección?":                      ("polite_request", "A2"),
-    "¿Cuánto cuesta ir al centro?":                     ("basic_question", "A1"),
-    "Todo recto, luego a la derecha.":                  ("present_simple", "A1"),
-    "Pare aquí, por favor.":                            ("present_simple", "A1"),
-    "¿Cuánto tiempo tarda?":                            ("basic_question", "A1"),
-    "¿Dónde está la parada de metro / autobús?":        ("basic_question", "A1"),
-    "Un billete para..., por favor.":                   ("present_simple", "A1"),
-    "¿Está lejos de aquí?":                             ("basic_question", "A1"),
-    "¿Acepta tarjeta?":                                 ("basic_question", "A1"),
-    "Quédese con el cambio.":                           ("polite_request", "B1"),
-    # Shopping
-    "¿Cuánto cuesta esto?":                             ("basic_question", "A1"),
-    "¿Tiene en talla M / grande / pequeña?":            ("basic_question", "A1"),
-    "¿Me lo puedo probar?":                             ("basic_question", "A2"),
-    "¿Tiene en otro color?":                            ("basic_question", "A1"),
-    "Me lo llevo.":                                     ("present_simple", "A1"),
-    "¿Está en oferta?":                                 ("basic_question", "A1"),
-    "¿Aceptan devoluciones?":                           ("basic_question", "A2"),
-    "Me queda bien / mal.":                             ("present_simple", "A1"),
-    "¿Puede envolverlo para regalo?":                   ("polite_request", "A2"),
-    "¿Dónde está la caja?":                             ("basic_question", "A1"),
-    # Hotel
-    "Tengo una reserva a nombre de...":                 ("present_simple", "A1"),
-    "¿A qué hora es el desayuno?":                      ("basic_question", "A1"),
-    "¿Hay WiFi? ¿Cuál es la contraseña?":               ("basic_question", "A1"),
-    "El aire acondicionado no funciona.":                ("present_simple", "A1"),
-    "¿Me puede cambiar de habitación?":                 ("polite_request", "A2"),
-    "Necesito más toallas, por favor.":                 ("present_simple", "A1"),
-    "¿Pueden despertarme a las siete?":                 ("polite_request", "A2"),
-    "¿A qué hora es el check-out?":                     ("basic_question", "A1"),
-    "¿Puede guardarme el equipaje?":                    ("polite_request", "A2"),
-    "La llave no funciona.":                            ("present_simple", "A1"),
-    # Health
-    "Necesito ver a un médico.":                        ("present_simple", "A1"),
-    "Me duele la cabeza / el estómago.":                ("present_simple", "A1"),
-    "Tengo fiebre / tos / náuseas.":                    ("present_simple", "A1"),
-    "Soy alérgico/a a...":                              ("present_simple", "A1"),
-    "¿Dónde está la farmacia más cercana?":             ("basic_question", "A1"),
-    "¿Tiene algo para el dolor de cabeza?":             ("basic_question", "A2"),
-    "Necesito una receta.":                             ("present_simple", "A2"),
-    "¿Cuándo puedo pedir una cita?":                    ("basic_question", "A2"),
-    "Llevo dos días sintiéndome mal.":                  ("complex", "B1"),
-    "¿Tiene seguro médico?":                            ("basic_question", "A2"),
-    # Work
-    "Me llamo... y soy de...":                          ("present_simple", "A1"),
-    "Tengo X años de experiencia en...":                ("present_simple", "A2"),
-    "Mis puntos fuertes son...":                        ("present_simple", "A2"),
-    "Me gustaría trabajar aquí porque...":              ("conditional", "B1"),
-    "Trabajo bien en equipo.":                          ("present_simple", "A1"),
-    "¿Cuál sería mi rol exactamente?":                  ("conditional", "B1"),
-    "¿Hay posibilidades de formación?":                 ("basic_question", "A2"),
-    "Puedo empezar cuando sea necesario.":              ("subjunctive", "B1"),
-    "¿Cuál es el horario de trabajo?":                  ("basic_question", "A1"),
-    "¿Tiene alguna pregunta para mí?":                  ("basic_question", "A2"),
-    # Social
-    "¡Hola! Me llamo..., ¿y tú?":                      ("greeting", "A1"),
-    "¿De dónde eres?":                                  ("basic_question", "A1"),
-    "¿A qué te dedicas?":                               ("basic_question", "A2"),
-    "¿Quieres tomar algo?":                             ("basic_question", "A1"),
-    "¿Qué planes tienes para el finde?":                ("basic_question", "A2"),
-    "Me alegra mucho conocerte.":                       ("present_simple", "A2"),
-    "¿Puedo invitarte a una copa?":                     ("polite_request", "A2"),
-    "¿Tienes WhatsApp? ¿Nos intercambiamos el número?": ("basic_question", "B1"),
-    "¿Cuánto tiempo llevas en España?":                 ("complex", "B1"),
-    "¡Ha sido un placer! Hasta pronto.":                ("past_simple", "A2"),
-    # Housing
-    "Hay un problema con la calefacción / el agua.":    ("present_simple", "A1"),
-    "El grifo / la caldera está roto/a.":               ("present_simple", "A1"),
-    "¿Cuándo puede mandar a alguien a arreglarlo?":     ("basic_question", "A2"),
-    "Llevo X días sin calefacción / agua caliente.":    ("complex", "B1"),
-    "¿Está incluido el agua / la luz en el alquiler?":  ("basic_question", "A2"),
-    "Necesito una copia del contrato.":                 ("present_simple", "A2"),
-    "¿Cuándo se paga el alquiler?":                     ("basic_question", "A1"),
-    "Los vecinos hacen mucho ruido.":                   ("present_simple", "A1"),
-    "¿Me puede devolver la fianza?":                    ("polite_request", "B1"),
-    "Voy a llamar a un fontanero / electricista.":      ("future", "A2"),
-    # General
-    "¿Puede ayudarme, por favor?":                      ("polite_request", "A1"),
-    "No entiendo. ¿Puede repetir más despacio?":        ("present_simple", "A1"),
-    "¿Habla inglés?":                                   ("basic_question", "A1"),
-    "¿Dónde está...?":                                  ("basic_question", "A1"),
-    "¿Cuánto cuesta?":                                  ("basic_question", "A1"),
-    "Por favor / Gracias / De nada.":                   ("greeting", "A1"),
-    "Buenos días / Buenas tardes / Buenas noches.":     ("greeting", "A1"),
-    "Disculpe, ¿me puede decir...?":                    ("polite_request", "A1"),
-    "Soy de... / No hablo español muy bien.":           ("present_simple", "A1"),
-    "¿Puede escribirlo, por favor?":                    ("polite_request", "A1"),
-}
-
 LEVEL_ORDER = ["A1", "A2", "B1"]
 
 PATTERN_LABELS = {
@@ -305,48 +203,3 @@ PATTERN_LABELS = {
 def get_corpus_frequencies(scenario_key: str) -> dict:
     """Return real corpus word frequencies for a given scenario."""
     return CORPUS_FREQUENCIES.get(scenario_key, CORPUS_FREQUENCIES["general"])
-
-def get_phrase_level(phrase_es: str) -> str:
-    """Return the minimum level tag for a phrase."""
-    return PHRASE_DIFFICULTY.get(phrase_es, ("present_simple", "A2"))[1]
-
-def get_phrase_pattern(phrase_es: str) -> str:
-    """Return the grammar pattern label for a phrase."""
-    raw = PHRASE_DIFFICULTY.get(phrase_es, ("present_simple", "A2"))[0]
-    return PATTERN_LABELS.get(raw, raw)
-
-def filter_phrases_by_level(phrases: list, user_level: str) -> list:
-    """
-    Filter phrases to those accessible at user's level.
-    Sorts easiest first for beginners, shows full range for B1.
-    Always guarantees at least 5 phrases are returned.
-    """
-    level_idx = LEVEL_ORDER.index(user_level) if user_level in LEVEL_ORDER else 0
-
-    def phrase_idx(p):
-        pl = get_phrase_level(p["es"])
-        return LEVEL_ORDER.index(pl) if pl in LEVEL_ORDER else 0
-
-    accessible = [p for p in phrases if phrase_idx(p) <= level_idx]
-
-    # Fallback: if fewer than 5 accessible, add easier ones from full list
-    if len(accessible) < 5:
-        accessible = sorted(phrases, key=phrase_idx)[:5]
-
-    # Sort: easiest first (A1 users see simplest phrases at top)
-    accessible = sorted(accessible, key=phrase_idx)
-
-    return accessible[:10]
-
-def get_dialogue_for_level(dialogue: list, user_level: str) -> list:
-    """
-    Trim dialogue length based on learner level.
-    A1 → first 6 lines (core exchange only)
-    A2 → first 8 lines
-    B1 → full dialogue
-    """
-    if user_level == "A1":
-        return dialogue[:6]
-    elif user_level == "A2":
-        return dialogue[:8]
-    return dialogue

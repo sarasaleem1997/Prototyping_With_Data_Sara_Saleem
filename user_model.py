@@ -32,12 +32,16 @@ DEMO_USER_ID = "demo_user"
 # ── Supabase connection ──────────────────────────────────────────────────────
 
 def _get_client():
-    """Return a Supabase client. Reads credentials from Streamlit secrets."""
+    """Return a Supabase client, initialised once per session."""
+    if "supabase_client" in st.session_state:
+        return st.session_state["supabase_client"]
     try:
         from supabase import create_client
         url = st.secrets["SUPABASE_URL"]
         key = st.secrets["SUPABASE_KEY"]
-        return create_client(url, key)
+        client = create_client(url, key)
+        st.session_state["supabase_client"] = client
+        return client
     except Exception:
         return None
 
@@ -79,7 +83,10 @@ def _empty_profile() -> dict:
 # ── Load / Save ──────────────────────────────────────────────────────────────
 
 def _load_profile() -> dict:
-    """Load profile from Supabase. Falls back to empty profile on error."""
+    """Load profile from Supabase. Caches in session state to avoid repeated network calls."""
+    if "cached_profile" in st.session_state:
+        return st.session_state["cached_profile"]
+
     client = _get_client()
     if client is None:
         return _empty_profile()
@@ -89,13 +96,18 @@ def _load_profile() -> dict:
                         .eq("id", DEMO_USER_ID)
                         .execute())
         if result.data:
-            return result.data[0]["data"]
+            profile = result.data[0]["data"]
+            st.session_state["cached_profile"] = profile
+            return profile
     except Exception:
         pass
     return _empty_profile()
 
 def _save_profile(profile: dict):
-    """Upsert profile to Supabase."""
+    """Upsert profile to Supabase and update session cache."""
+    # Update cache immediately so UI reflects changes without another network call
+    st.session_state["cached_profile"] = profile
+
     client = _get_client()
     if client is None:
         return

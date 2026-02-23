@@ -68,15 +68,22 @@ Return ONLY a valid JSON array with exactly 6 objects. Each object must have:
 - "es": the Spanish phrase (natural, native-sounding)
 - "en": the English translation
 - "tip": a practical usage tip starting with 💡 (1 sentence, specific to this situation)
+- "level": one of "A1", "A2", or "B1" based on grammar complexity
+- "pattern": one of "present_simple", "basic_question", "polite_request", "future", "past_simple", "conditional", "subjunctive", "complex", "greeting", "negation"
+
+Level guide:
+- A1: present tense only, very short, basic vocab
+- A2: simple past/future, slightly longer
+- B1: conditional, subjunctive, complex structures
 
 Rules:
-- Match complexity strictly to {level_code} level
+- Match complexity strictly to {level_code} level — most phrases should be {level_code}
 - Phrases must be immediately usable in this exact situation
 - No markdown, no explanation, just the JSON array
 
 Example format:
 [
-  {{"es": "...", "en": "...", "tip": "💡 ..."}},
+  {{"es": "...", "en": "...", "tip": "💡 ...", "level": "A1", "pattern": "present_simple"}},
   ...
 ]"""
 

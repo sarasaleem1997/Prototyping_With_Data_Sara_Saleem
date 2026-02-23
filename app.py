@@ -6,15 +6,7 @@ import os
 
 # ── Import corpus data and user model (same directory) ─────────────────────
 sys.path.insert(0, os.path.dirname(__file__))
-from corpus_data import (
-    get_corpus_frequencies,
-    filter_phrases_by_level,
-    get_dialogue_for_level,
-    get_phrase_level,
-    get_phrase_pattern,
-    LEVEL_ORDER,
-    PATTERN_LABELS,
-)
+from corpus_data import get_corpus_frequencies
 from user_model import (
     record_session,
     get_strengths_and_weaknesses,
@@ -23,7 +15,6 @@ from user_model import (
     get_session_count,
     get_scenario_history,
     clear_profile,
-    PATTERN_LABELS as MODEL_PATTERN_LABELS,
 )
 from llm_generator import (
     generate_phrases,
@@ -171,444 +162,39 @@ hr { border-color: #374151; }
 </style>
 """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────
-#  KNOWLEDGE BASE
-# ─────────────────────────────────────────────
-
-KNOWLEDGE_BASE = {
-    "restaurant": {
-        "phrases": [
-            {"es": "Una mesa para dos, por favor.", "en": "A table for two, please.", "tip": "💡 Always add 'por favor' — it goes a long way!"},
-            {"es": "¿Me trae la carta, por favor?", "en": "Could you bring the menu, please?", "tip": "💡 'Carta' = menu in Spain. In Latin America say 'menú'."},
-            {"es": "¿Qué recomienda?", "en": "What do you recommend?", "tip": "💡 Locals love this question — you'll get great tips."},
-            {"es": "Voy a pedir...", "en": "I'm going to order...", "tip": "💡 The most natural way to place your order."},
-            {"es": "¿Tiene algo sin gluten / vegetariano?", "en": "Do you have anything gluten-free / vegetarian?", "tip": "💡 Swap the last word for your dietary need."},
-            {"es": "¿Me trae la cuenta, por favor?", "en": "Could you bring the bill, please?", "tip": "💡 More polite than just saying 'la cuenta'."},
-            {"es": "Está muy rico, gracias.", "en": "It's delicious, thank you.", "tip": "💡 Complimenting the food makes you instantly likeable."},
-            {"es": "¿Puede repetir más despacio?", "en": "Could you repeat that more slowly?", "tip": "💡 Your most important phrase as a beginner!"},
-            {"es": "¿Aceptan tarjeta?", "en": "Do you accept card?", "tip": "💡 Spain is mostly card-friendly but always worth asking."},
-            {"es": "¿Está incluido el servicio?", "en": "Is service included?", "tip": "💡 Tipping culture varies — always good to check."},
-        ],
-        "dialogues": {
-            "A1": [
-                {"speaker": "Waiter", "es": "¡Buenas tardes! ¿Mesa para cuántos?", "en": "Good afternoon! Table for how many?"},
-                {"speaker": "You",   "es": "Para dos, por favor.", "en": "For two, please."},
-                {"speaker": "Waiter", "es": "¿Qué quieren beber?", "en": "What would you like to drink?"},
-                {"speaker": "You",   "es": "Agua, por favor. ¿Qué recomienda?", "en": "Water, please. What do you recommend?"},
-                {"speaker": "Waiter", "es": "El pollo está muy bueno hoy.", "en": "The chicken is very good today."},
-                {"speaker": "You",   "es": "Perfecto. Voy a pedir eso.", "en": "Perfect. I'll order that."},
-            ],
-            "A2": [
-                {"speaker": "Waiter", "es": "¡Buenas tardes! ¿Tienen reserva?", "en": "Good afternoon! Do you have a reservation?"},
-                {"speaker": "You",   "es": "No, no tenemos. ¿Tienen mesa libre?", "en": "No, we don't. Do you have a free table?"},
-                {"speaker": "Waiter", "es": "Sí, claro. ¿Mesa para cuántas personas?", "en": "Yes, of course. Table for how many?"},
-                {"speaker": "You",   "es": "Para dos. ¿Me trae la carta, por favor?", "en": "For two. Could you bring the menu, please?"},
-                {"speaker": "Waiter", "es": "¿Qué quieren tomar de bebida?", "en": "What would you like to drink?"},
-                {"speaker": "You",   "es": "Agua con gas. ¿Qué recomienda hoy?", "en": "Sparkling water. What do you recommend today?"},
-                {"speaker": "Waiter", "es": "El pollo al ajillo está muy bueno.", "en": "The garlic chicken is very good."},
-                {"speaker": "You",   "es": "Perfecto. Voy a pedir eso. ¿Aceptan tarjeta?", "en": "Perfect. I'll have that. Do you accept card?"},
-            ],
-            "B1": [
-                {"speaker": "Waiter", "es": "¡Buenas tardes! ¿Tienen reserva?", "en": "Good afternoon! Do you have a reservation?"},
-                {"speaker": "You",   "es": "No, no tenemos. ¿Tienen mesa libre?", "en": "No, we don't. Do you have a free table?"},
-                {"speaker": "Waiter", "es": "Sí, claro. ¿Mesa para cuántas personas?", "en": "Yes, of course. Table for how many?"},
-                {"speaker": "You",   "es": "Para dos, por favor.", "en": "For two, please."},
-                {"speaker": "Waiter", "es": "¿Qué quieren tomar de bebida?", "en": "What would you like to drink?"},
-                {"speaker": "You",   "es": "Agua con gas para mí. ¿Qué recomienda hoy?", "en": "Sparkling water for me. What do you recommend today?"},
-                {"speaker": "Waiter", "es": "El pollo al ajillo está muy bueno.", "en": "The garlic chicken is very good."},
-                {"speaker": "You",   "es": "Perfecto. Voy a pedir eso, gracias.", "en": "Perfect. I'll order that, thank you."},
-                {"speaker": "Waiter", "es": "¿Algo más?", "en": "Anything else?"},
-                {"speaker": "You",   "es": "No, gracias. ¿Me trae la cuenta cuando pueda?", "en": "No, thank you. Could you bring the bill when you can?"},
-            ],
-        },
-    },
-    "transport": {
-        "phrases": [
-            {"es": "¿Me lleva a esta dirección?", "en": "Can you take me to this address?", "tip": "💡 Show your phone with the address — works every time."},
-            {"es": "¿Cuánto cuesta ir al centro?", "en": "How much does it cost to go to the center?", "tip": "💡 Always ask before getting in an unofficial taxi."},
-            {"es": "Todo recto, luego a la derecha.", "en": "Straight ahead, then right.", "tip": "💡 Key words: derecha (right), izquierda (left), recto (straight)."},
-            {"es": "Pare aquí, por favor.", "en": "Stop here, please.", "tip": "💡 Essential — say it early enough!"},
-            {"es": "¿Cuánto tiempo tarda?", "en": "How long does it take?", "tip": "💡 Great for planning your journey."},
-            {"es": "¿Dónde está la parada de metro / autobús?", "en": "Where is the metro / bus stop?", "tip": "💡 Swap 'metro' for 'autobús' or 'tren'."},
-            {"es": "Un billete para..., por favor.", "en": "One ticket to..., please.", "tip": "💡 'Billete' = ticket in Spain. Latin America uses 'boleto'."},
-            {"es": "¿Está lejos de aquí?", "en": "Is it far from here?", "tip": "💡 'Cerca' = near, 'lejos' = far."},
-            {"es": "¿Acepta tarjeta?", "en": "Do you accept card?", "tip": "💡 Many taxis are still cash only in Spain."},
-            {"es": "Quédese con el cambio.", "en": "Keep the change.", "tip": "💡 A classy way to tip your driver."},
-        ],
-        "dialogues": {
-            "A1": [
-                {"speaker": "You",    "es": "¡Hola! ¿Está libre?", "en": "Hi! Are you free?"},
-                {"speaker": "Driver", "es": "Sí, ¿adónde va?", "en": "Yes, where are you going?"},
-                {"speaker": "You",    "es": "Al aeropuerto, por favor.", "en": "To the airport, please."},
-                {"speaker": "Driver", "es": "De acuerdo.", "en": "Alright."},
-                {"speaker": "You",    "es": "¿Cuánto cuesta?", "en": "How much does it cost?"},
-                {"speaker": "Driver", "es": "Unos treinta euros.", "en": "About thirty euros."},
-            ],
-            "A2": [
-                {"speaker": "You",    "es": "¡Hola! ¿Está libre?", "en": "Hi! Are you free?"},
-                {"speaker": "Driver", "es": "Sí, ¿adónde va?", "en": "Yes, where are you going?"},
-                {"speaker": "You",    "es": "Al aeropuerto, por favor. ¿Cuánto cuesta?", "en": "To the airport, please. How much does it cost?"},
-                {"speaker": "Driver", "es": "Unos treinta euros, depende del tráfico.", "en": "About thirty euros, depending on traffic."},
-                {"speaker": "You",    "es": "¿Cuánto tiempo tarda?", "en": "How long does it take?"},
-                {"speaker": "Driver", "es": "Unos cuarenta minutos.", "en": "About forty minutes."},
-                {"speaker": "You",    "es": "Perfecto. ¿Acepta tarjeta?", "en": "Perfect. Do you accept card?"},
-                {"speaker": "Driver", "es": "Sí, sin problema.", "en": "Yes, no problem."},
-            ],
-            "B1": [
-                {"speaker": "You",    "es": "¡Hola! ¿Está libre?", "en": "Hi! Are you free?"},
-                {"speaker": "Driver", "es": "Sí, ¿adónde va?", "en": "Yes, where are you going?"},
-                {"speaker": "You",    "es": "Al aeropuerto, por favor. ¿Cuánto cuesta?", "en": "To the airport, please. How much does it cost?"},
-                {"speaker": "Driver", "es": "Unos treinta euros, depende del tráfico.", "en": "About thirty euros, depending on traffic."},
-                {"speaker": "You",    "es": "Bien. ¿Cuánto tiempo tarda?", "en": "OK. How long does it take?"},
-                {"speaker": "Driver", "es": "Unos cuarenta minutos si no hay tráfico.", "en": "About forty minutes if there's no traffic."},
-                {"speaker": "You",    "es": "Perfecto. ¿Acepta tarjeta?", "en": "Perfect. Do you accept card?"},
-                {"speaker": "Driver", "es": "Sí, sin problema.", "en": "Yes, no problem."},
-                {"speaker": "You",    "es": "Gracias. Puede dejarme en la entrada principal.", "en": "Thank you. You can drop me at the main entrance."},
-                {"speaker": "Driver", "es": "¡Claro! Buen viaje.", "en": "Of course! Have a good trip."},
-            ],
-        },
-    },
-    "shopping": {
-        "phrases": [
-            {"es": "¿Cuánto cuesta esto?", "en": "How much does this cost?", "tip": "💡 The most universal shopping phrase."},
-            {"es": "¿Tiene en talla M / grande / pequeña?", "en": "Do you have it in size M / large / small?", "tip": "💡 Sizes: XS, S, M, L, XL — same as English!"},
-            {"es": "¿Me lo puedo probar?", "en": "Can I try it on?", "tip": "💡 'Los probadores' = the fitting rooms."},
-            {"es": "¿Tiene en otro color?", "en": "Do you have it in another color?", "tip": "💡 Colors: rojo, azul, verde, negro, blanco, gris."},
-            {"es": "Me lo llevo.", "en": "I'll take it.", "tip": "💡 The magic phrase when you've decided to buy."},
-            {"es": "¿Está en oferta?", "en": "Is it on sale?", "tip": "💡 'Rebajas' = sales season (January & July in Spain)."},
-            {"es": "¿Aceptan devoluciones?", "en": "Do you accept returns?", "tip": "💡 Always check the return policy!"},
-            {"es": "Me queda bien / mal.", "en": "It fits well / doesn't fit.", "tip": "💡 'Grande' = too big, 'pequeño' = too small."},
-            {"es": "¿Puede envolverlo para regalo?", "en": "Can you gift wrap it?", "tip": "💡 Many Spanish shops offer free gift wrapping."},
-            {"es": "¿Dónde está la caja?", "en": "Where is the checkout?", "tip": "💡 'Caja' literally means 'box' but means checkout."},
-        ],
-        "dialogues": {
-            "A1": [
-                {"speaker": "You",   "es": "Hola, ¿cuánto cuesta esto?", "en": "Hi, how much does this cost?"},
-                {"speaker": "Staff", "es": "Veintidós euros.", "en": "Twenty-two euros."},
-                {"speaker": "You",   "es": "¿Tiene en talla M?", "en": "Do you have it in size M?"},
-                {"speaker": "Staff", "es": "Sí, un momento.", "en": "Yes, one moment."},
-                {"speaker": "You",   "es": "Me queda bien. Me lo llevo.", "en": "It fits well. I'll take it."},
-                {"speaker": "Staff", "es": "¿En efectivo o tarjeta?", "en": "Cash or card?"},
-            ],
-            "A2": [
-                {"speaker": "You",   "es": "Hola, ¿cuánto cuesta esta camiseta?", "en": "Hi, how much does this t-shirt cost?"},
-                {"speaker": "Staff", "es": "Está a veintidós euros.", "en": "It's twenty-two euros."},
-                {"speaker": "You",   "es": "¿Tiene en talla M y en azul?", "en": "Do you have it in size M and in blue?"},
-                {"speaker": "Staff", "es": "Sí, un momento. ¿Se la quiere probar?", "en": "Yes, one moment. Would you like to try it on?"},
-                {"speaker": "You",   "es": "Sí, por favor. ¿Dónde están los probadores?", "en": "Yes, please. Where are the fitting rooms?"},
-                {"speaker": "Staff", "es": "Al fondo a la derecha.", "en": "At the back on the right."},
-                {"speaker": "You",   "es": "Me queda bien. Me la llevo.", "en": "It fits well. I'll take it."},
-                {"speaker": "Staff", "es": "¿Paga en efectivo o con tarjeta?", "en": "Are you paying cash or by card?"},
-            ],
-            "B1": [
-                {"speaker": "You",   "es": "Hola, ¿cuánto cuesta esta camiseta?", "en": "Hi, how much does this t-shirt cost?"},
-                {"speaker": "Staff", "es": "Está a veintidós euros.", "en": "It's twenty-two euros."},
-                {"speaker": "You",   "es": "¿Tiene en talla M?", "en": "Do you have it in size M?"},
-                {"speaker": "Staff", "es": "Sí, un momento. ¿De qué color la quiere?", "en": "Yes, one moment. What color would you like?"},
-                {"speaker": "You",   "es": "En azul, por favor. ¿Me la puedo probar?", "en": "In blue, please. Can I try it on?"},
-                {"speaker": "Staff", "es": "Claro, los probadores están al fondo.", "en": "Of course, the fitting rooms are at the back."},
-                {"speaker": "You",   "es": "Me queda bien. Me la llevo.", "en": "It fits well. I'll take it."},
-                {"speaker": "Staff", "es": "¿Paga en efectivo o con tarjeta?", "en": "Are you paying cash or by card?"},
-                {"speaker": "You",   "es": "Con tarjeta, por favor. ¿Aceptan devoluciones?", "en": "By card, please. Do you accept returns?"},
-                {"speaker": "Staff", "es": "Sí, con el ticket en los próximos treinta días.", "en": "Yes, with the receipt within thirty days."},
-            ],
-        },
-    },
-    "hotel": {
-        "phrases": [
-            {"es": "Tengo una reserva a nombre de...", "en": "I have a reservation under the name of...", "tip": "💡 Have your booking confirmation ready on your phone."},
-            {"es": "¿A qué hora es el desayuno?", "en": "What time is breakfast?", "tip": "💡 In Spain, breakfast is usually 7–10am."},
-            {"es": "¿Hay WiFi? ¿Cuál es la contraseña?", "en": "Is there WiFi? What's the password?", "tip": "💡 Two questions in one — very efficient!"},
-            {"es": "El aire acondicionado no funciona.", "en": "The air conditioning doesn't work.", "tip": "💡 Swap for: calefacción (heating), ducha (shower), TV."},
-            {"es": "¿Me puede cambiar de habitación?", "en": "Can you change my room?", "tip": "💡 Be polite but firm if there's a real problem."},
-            {"es": "Necesito más toallas, por favor.", "en": "I need more towels, please.", "tip": "💡 Also: almohadas (pillows), mantas (blankets)."},
-            {"es": "¿Pueden despertarme a las siete?", "en": "Can you wake me up at seven?", "tip": "💡 A classic hotel request."},
-            {"es": "¿A qué hora es el check-out?", "en": "What time is check-out?", "tip": "💡 Usually noon in Spain."},
-            {"es": "¿Puede guardarme el equipaje?", "en": "Can you store my luggage?", "tip": "💡 Great when check-out is before your flight."},
-            {"es": "La llave no funciona.", "en": "The key doesn't work.", "tip": "💡 Very common with electronic key cards!"},
-        ],
-        "dialogues": {
-            "A1": [
-                {"speaker": "Receptionist", "es": "¡Buenas tardes! ¿En qué puedo ayudarle?", "en": "Good afternoon! How can I help you?"},
-                {"speaker": "You",          "es": "Tengo una reserva. Me llamo García.", "en": "I have a reservation. My name is García."},
-                {"speaker": "Receptionist", "es": "Perfecto. Su habitación es la 204.", "en": "Perfect. Your room is 204."},
-                {"speaker": "You",          "es": "¿Hay WiFi?", "en": "Is there WiFi?"},
-                {"speaker": "Receptionist", "es": "Sí, la contraseña está aquí.", "en": "Yes, the password is here."},
-                {"speaker": "You",          "es": "Gracias. ¿A qué hora es el desayuno?", "en": "Thank you. What time is breakfast?"},
-            ],
-            "A2": [
-                {"speaker": "Receptionist", "es": "¡Buenas tardes! ¿En qué puedo ayudarle?", "en": "Good afternoon! How can I help you?"},
-                {"speaker": "You",          "es": "Hola, tengo una reserva a nombre de García.", "en": "Hi, I have a reservation under the name García."},
-                {"speaker": "Receptionist", "es": "Perfecto. ¿Me puede dar su pasaporte?", "en": "Perfect. Can you give me your passport?"},
-                {"speaker": "You",          "es": "Aquí tiene. ¿A qué hora es el desayuno?", "en": "Here you go. What time is breakfast?"},
-                {"speaker": "Receptionist", "es": "De siete a diez y media.", "en": "From seven to ten thirty."},
-                {"speaker": "You",          "es": "¿Hay WiFi en la habitación?", "en": "Is there WiFi in the room?"},
-                {"speaker": "Receptionist", "es": "Sí, la contraseña está en esta tarjeta.", "en": "Yes, the password is on this card."},
-                {"speaker": "You",          "es": "¿A qué hora es el check-out?", "en": "What time is check-out?"},
-            ],
-            "B1": [
-                {"speaker": "Receptionist", "es": "¡Buenas tardes! ¿En qué le puedo ayudar?", "en": "Good afternoon! How can I help you?"},
-                {"speaker": "You",          "es": "Hola, tengo una reserva a nombre de García.", "en": "Hi, I have a reservation under the name García."},
-                {"speaker": "Receptionist", "es": "Perfecto. ¿Me puede dar su pasaporte?", "en": "Perfect. Can you give me your passport?"},
-                {"speaker": "You",          "es": "Aquí tiene. ¿A qué hora es el desayuno?", "en": "Here you go. What time is breakfast?"},
-                {"speaker": "Receptionist", "es": "El desayuno es de siete a diez y media.", "en": "Breakfast is from seven to ten thirty."},
-                {"speaker": "You",          "es": "Genial. ¿Hay WiFi en la habitación?", "en": "Great. Is there WiFi in the room?"},
-                {"speaker": "Receptionist", "es": "Sí, la contraseña está en esta tarjeta.", "en": "Yes, the password is on this card."},
-                {"speaker": "You",          "es": "Muchas gracias. ¿A qué hora es el check-out?", "en": "Thank you very much. And what time is check-out?"},
-                {"speaker": "Receptionist", "es": "A las doce del mediodía.", "en": "At twelve noon."},
-                {"speaker": "You",          "es": "¿Pueden guardarme el equipaje hasta las tres?", "en": "Can you store my luggage until three?"},
-            ],
-        },
-    },
-    "health": {
-        "phrases": [
-            {"es": "Necesito ver a un médico.", "en": "I need to see a doctor.", "tip": "💡 In an emergency say: '¡Llame a una ambulancia!'"},
-            {"es": "Me duele la cabeza / el estómago.", "en": "My head / stomach hurts.", "tip": "💡 'Me duele + body part' is the key pattern for pain."},
-            {"es": "Tengo fiebre / tos / náuseas.", "en": "I have a fever / cough / nausea.", "tip": "💡 'Tengo + symptom' for symptoms you have."},
-            {"es": "Soy alérgico/a a...", "en": "I'm allergic to...", "tip": "💡 Critical to know! Penicilina, nueces, gluten, etc."},
-            {"es": "¿Dónde está la farmacia más cercana?", "en": "Where is the nearest pharmacy?", "tip": "💡 Green cross sign = farmacia in Spain."},
-            {"es": "¿Tiene algo para el dolor de cabeza?", "en": "Do you have something for a headache?", "tip": "💡 Swap 'dolor de cabeza' for your ailment."},
-            {"es": "Necesito una receta.", "en": "I need a prescription.", "tip": "💡 Some medicines in Spain require a prescription."},
-            {"es": "¿Cuándo puedo pedir una cita?", "en": "When can I make an appointment?", "tip": "💡 'Pedir una cita' = to book an appointment."},
-            {"es": "Llevo dos días sintiéndome mal.", "en": "I've been feeling unwell for two days.", "tip": "💡 Context helps the doctor a lot."},
-            {"es": "¿Tiene seguro médico?", "en": "Do you have health insurance?", "tip": "💡 Have your EHIC card ready if you're in the EU."},
-        ],
-        "dialogues": {
-            "A1": [
-                {"speaker": "Doctor", "es": "¿Qué le pasa?", "en": "What's wrong?"},
-                {"speaker": "You",    "es": "Me duele la cabeza. Tengo fiebre.", "en": "My head hurts. I have a fever."},
-                {"speaker": "Doctor", "es": "¿Desde cuándo?", "en": "Since when?"},
-                {"speaker": "You",    "es": "Desde ayer.", "en": "Since yesterday."},
-                {"speaker": "Doctor", "es": "¿Alergia a medicamentos?", "en": "Allergy to medicine?"},
-                {"speaker": "You",    "es": "Soy alérgico/a a la penicilina.", "en": "I'm allergic to penicillin."},
-            ],
-            "A2": [
-                {"speaker": "Doctor", "es": "Buenos días, ¿qué le pasa?", "en": "Good morning, what's wrong?"},
-                {"speaker": "You",    "es": "Me duele la cabeza y tengo fiebre.", "en": "My head hurts and I have a fever."},
-                {"speaker": "Doctor", "es": "¿Desde cuándo se siente así?", "en": "How long have you felt this way?"},
-                {"speaker": "You",    "es": "Desde ayer por la noche.", "en": "Since last night."},
-                {"speaker": "Doctor", "es": "¿Es alérgico/a a algún medicamento?", "en": "Are you allergic to any medication?"},
-                {"speaker": "You",    "es": "Soy alérgico/a a la penicilina.", "en": "I'm allergic to penicillin."},
-                {"speaker": "Doctor", "es": "Voy a recetarle algo para el dolor.", "en": "I'm going to prescribe something for the pain."},
-                {"speaker": "You",    "es": "¿Necesito volver para otra cita?", "en": "Do I need to come back for another appointment?"},
-            ],
-            "B1": [
-                {"speaker": "Doctor", "es": "Buenos días, ¿qué le pasa?", "en": "Good morning, what's wrong?"},
-                {"speaker": "You",    "es": "Me duele mucho la cabeza y tengo fiebre.", "en": "I have a bad headache and I have a fever."},
-                {"speaker": "Doctor", "es": "¿Desde cuándo se siente así?", "en": "How long have you been feeling like this?"},
-                {"speaker": "You",    "es": "Llevo dos días sintiéndome mal.", "en": "I've been feeling unwell for two days."},
-                {"speaker": "Doctor", "es": "¿Es alérgico/a a algún medicamento?", "en": "Are you allergic to any medication?"},
-                {"speaker": "You",    "es": "Soy alérgico/a a la penicilina.", "en": "I'm allergic to penicillin."},
-                {"speaker": "Doctor", "es": "De acuerdo. Voy a recetarle algo para el dolor.", "en": "Alright. I'm going to prescribe something for the pain."},
-                {"speaker": "You",    "es": "¿Necesito volver para otra cita?", "en": "Do I need to come back for another appointment?"},
-                {"speaker": "Doctor", "es": "Si no mejora en tres días, vuelva.", "en": "If you don't improve in three days, come back."},
-                {"speaker": "You",    "es": "Muchas gracias, doctor.", "en": "Thank you very much, doctor."},
-            ],
-        },
-    },
-    "work": {
-        "phrases": [
-            {"es": "Me llamo... y soy de...", "en": "My name is... and I'm from...", "tip": "💡 Always start with a clear, confident introduction."},
-            {"es": "Tengo X años de experiencia en...", "en": "I have X years of experience in...", "tip": "💡 Swap X for your number and fill in your field."},
-            {"es": "Mis puntos fuertes son...", "en": "My strengths are...", "tip": "💡 Prepare 2-3 adjectives: organizado, creativo, responsable."},
-            {"es": "Me gustaría trabajar aquí porque...", "en": "I'd like to work here because...", "tip": "💡 Always show you've researched the company."},
-            {"es": "Trabajo bien en equipo.", "en": "I work well in a team.", "tip": "💡 Also useful: 'de forma independiente' (independently)."},
-            {"es": "¿Cuál sería mi rol exactamente?", "en": "What would my exact role be?", "tip": "💡 Shows you're serious and detail-oriented."},
-            {"es": "¿Hay posibilidades de formación?", "en": "Are there training opportunities?", "tip": "💡 Great question that shows ambition."},
-            {"es": "Puedo empezar cuando sea necesario.", "en": "I can start whenever necessary.", "tip": "💡 Shows flexibility — employers love this."},
-            {"es": "¿Cuál es el horario de trabajo?", "en": "What are the working hours?", "tip": "💡 Completely normal to ask this in an interview."},
-            {"es": "¿Tiene alguna pregunta para mí?", "en": "Do you have any questions for me?", "tip": "💡 A confident way to close the interview."},
-        ],
-        "dialogues": {
-            "A1": [
-                {"speaker": "Interviewer", "es": "Buenos días. ¿Cómo se llama?", "en": "Good morning. What's your name?"},
-                {"speaker": "You",         "es": "Me llamo Ana. Encantada.", "en": "My name is Ana. Nice to meet you."},
-                {"speaker": "Interviewer", "es": "¿Por qué quiere este trabajo?", "en": "Why do you want this job?"},
-                {"speaker": "You",         "es": "Me gusta mucho esta empresa.", "en": "I really like this company."},
-                {"speaker": "Interviewer", "es": "¿Habla otros idiomas?", "en": "Do you speak other languages?"},
-                {"speaker": "You",         "es": "Sí, inglés y un poco de español.", "en": "Yes, English and a little Spanish."},
-            ],
-            "A2": [
-                {"speaker": "Interviewer", "es": "Buenos días, siéntese.", "en": "Good morning, sit down."},
-                {"speaker": "You",         "es": "Buenos días, encantado/a de conocerle.", "en": "Good morning, nice to meet you."},
-                {"speaker": "Interviewer", "es": "Cuénteme sobre usted.", "en": "Tell me about yourself."},
-                {"speaker": "You",         "es": "Me llamo Ana. Tengo cinco años de experiencia en marketing.", "en": "My name is Ana. I have five years of experience in marketing."},
-                {"speaker": "Interviewer", "es": "¿Por qué quiere trabajar aquí?", "en": "Why do you want to work here?"},
-                {"speaker": "You",         "es": "Admiro mucho esta empresa. Trabajo bien en equipo.", "en": "I really admire this company. I work well in a team."},
-                {"speaker": "Interviewer", "es": "¿Cuáles son sus puntos fuertes?", "en": "What are your strengths?"},
-                {"speaker": "You",         "es": "Soy organizada, creativa y muy responsable.", "en": "I'm organised, creative and very responsible."},
-            ],
-            "B1": [
-                {"speaker": "Interviewer", "es": "Buenos días, siéntese por favor.", "en": "Good morning, please sit down."},
-                {"speaker": "You",         "es": "Buenos días, encantado/a de conocerle.", "en": "Good morning, nice to meet you."},
-                {"speaker": "Interviewer", "es": "Cuénteme un poco sobre usted.", "en": "Tell me a bit about yourself."},
-                {"speaker": "You",         "es": "Me llamo Ana. Tengo cinco años de experiencia en marketing.", "en": "My name is Ana. I have five years of experience in marketing."},
-                {"speaker": "Interviewer", "es": "¿Por qué quiere trabajar en nuestra empresa?", "en": "Why do you want to work at our company?"},
-                {"speaker": "You",         "es": "Me gustaría trabajar aquí porque admiro su innovación.", "en": "I'd like to work here because I admire your innovation."},
-                {"speaker": "Interviewer", "es": "¿Cuáles son sus puntos fuertes?", "en": "What are your strengths?"},
-                {"speaker": "You",         "es": "Soy muy organizada, creativa y trabajo bien en equipo.", "en": "I'm very organized, creative and work well in a team."},
-                {"speaker": "Interviewer", "es": "¿Tiene alguna pregunta para nosotros?", "en": "Do you have any questions for us?"},
-                {"speaker": "You",         "es": "Sí, ¿hay posibilidades de formación y crecimiento?", "en": "Yes, are there training and growth opportunities?"},
-            ],
-        },
-    },
-    "social": {
-        "phrases": [
-            {"es": "¡Hola! Me llamo..., ¿y tú?", "en": "Hi! My name is..., and yours?", "tip": "💡 Simple and warm — perfect opener."},
-            {"es": "¿De dónde eres?", "en": "Where are you from?", "tip": "💡 One of the most common conversation starters."},
-            {"es": "¿A qué te dedicas?", "en": "What do you do for work?", "tip": "💡 More natural than '¿Cuál es tu profesión?'"},
-            {"es": "¿Quieres tomar algo?", "en": "Do you want to grab a drink?", "tip": "💡 Works for any drink — coffee, beer, etc."},
-            {"es": "¿Qué planes tienes para el finde?", "en": "What are your plans for the weekend?", "tip": "💡 'Finde' = weekend (informal, very Spanish)."},
-            {"es": "Me alegra mucho conocerte.", "en": "Really nice to meet you.", "tip": "💡 Warmer than just 'encantado/a'."},
-            {"es": "¿Puedo invitarte a una copa?", "en": "Can I buy you a drink?", "tip": "💡 Classic and direct — works in any social setting."},
-            {"es": "¿Tienes WhatsApp? ¿Nos intercambiamos el número?", "en": "Do you have WhatsApp? Shall we exchange numbers?", "tip": "💡 WhatsApp is the primary messaging app in Spain."},
-            {"es": "¿Cuánto tiempo llevas en España?", "en": "How long have you been in Spain?", "tip": "💡 Great for connecting with fellow expats."},
-            {"es": "¡Ha sido un placer! Hasta pronto.", "en": "It's been a pleasure! See you soon.", "tip": "💡 A warm way to end any social interaction."},
-        ],
-        "dialogues": {
-            "A1": [
-                {"speaker": "Person", "es": "¡Hola! ¿Cómo te llamas?", "en": "Hi! What's your name?"},
-                {"speaker": "You",    "es": "Me llamo Alex. ¿Y tú?", "en": "My name is Alex. And you?"},
-                {"speaker": "Person", "es": "Soy María. ¿De dónde eres?", "en": "I'm María. Where are you from?"},
-                {"speaker": "You",    "es": "Soy de Alemania. ¿Y tú?", "en": "I'm from Germany. And you?"},
-                {"speaker": "Person", "es": "¡Qué bien! ¿Quieres tomar algo?", "en": "How nice! Do you want something to drink?"},
-                {"speaker": "You",    "es": "Sí, gracias. Me alegra conocerte.", "en": "Yes, thank you. Nice to meet you."},
-            ],
-            "A2": [
-                {"speaker": "Person", "es": "¡Hola! ¿Eres nuevo/a aquí?", "en": "Hi! Are you new here?"},
-                {"speaker": "You",    "es": "Sí, llegué hace una semana. Me llamo Alex.", "en": "Yes, I arrived a week ago. My name is Alex."},
-                {"speaker": "Person", "es": "¡Qué bien! Yo soy María. ¿De dónde eres?", "en": "How nice! I'm María. Where are you from?"},
-                {"speaker": "You",    "es": "Soy de Alemania. ¿Y tú, a qué te dedicas?", "en": "I'm from Germany. And you, what do you do?"},
-                {"speaker": "Person", "es": "Soy profesora. ¿Te gusta España?", "en": "I'm a teacher. Do you like Spain?"},
-                {"speaker": "You",    "es": "¡Me encanta! ¿Quieres tomar algo?", "en": "I love it! Do you want to grab a drink?"},
-                {"speaker": "Person", "es": "¡Claro! Con mucho gusto.", "en": "Of course! With pleasure."},
-                {"speaker": "You",    "es": "¿Tienes WhatsApp? ¿Nos intercambiamos el número?", "en": "Do you have WhatsApp? Shall we exchange numbers?"},
-            ],
-            "B1": [
-                {"speaker": "Person", "es": "¡Hola! ¿Eres nuevo/a aquí?", "en": "Hi! Are you new here?"},
-                {"speaker": "You",    "es": "Sí, llegué hace una semana. Me llamo Alex.", "en": "Yes, I arrived a week ago. My name is Alex."},
-                {"speaker": "Person", "es": "¡Qué bien! Yo soy María. ¿De dónde eres?", "en": "How nice! I'm María. Where are you from?"},
-                {"speaker": "You",    "es": "Soy de Alemania, pero vivo aquí por trabajo.", "en": "I'm from Germany, but I live here for work."},
-                {"speaker": "Person", "es": "¡Qué interesante! ¿Y a qué te dedicas?", "en": "How interesting! And what do you do?"},
-                {"speaker": "You",    "es": "Soy ingeniero/a de software. ¿Y tú?", "en": "I'm a software engineer. And you?"},
-                {"speaker": "Person", "es": "Soy profesora. ¿Te gusta Barcelona hasta ahora?", "en": "I'm a teacher. Do you like Barcelona so far?"},
-                {"speaker": "You",    "es": "¡Me encanta! ¿Qué recomiendas visitar?", "en": "I love it! What do you recommend visiting?"},
-                {"speaker": "Person", "es": "El barrio gótico es increíble. ¿Quedamos un día?", "en": "The Gothic quarter is incredible. Shall we meet up one day?"},
-                {"speaker": "You",    "es": "¡Me encantaría! ¿Tienes WhatsApp?", "en": "I'd love that! Do you have WhatsApp?"},
-            ],
-        },
-    },
-    "housing": {
-        "phrases": [
-            {"es": "Hay un problema con la calefacción / el agua.", "en": "There's a problem with the heating / the water.", "tip": "💡 Swap for your issue: luz (electricity), goteras (leaks)."},
-            {"es": "El grifo / la caldera está roto/a.", "en": "The tap / boiler is broken.", "tip": "💡 'Roto' for masculine nouns, 'rota' for feminine."},
-            {"es": "¿Cuándo puede mandar a alguien a arreglarlo?", "en": "When can you send someone to fix it?", "tip": "💡 Firm but polite — sets a clear expectation."},
-            {"es": "Llevo X días sin calefacción / agua caliente.", "en": "I've been without heating / hot water for X days.", "tip": "💡 Stating duration makes your complaint more urgent."},
-            {"es": "¿Está incluido el agua / la luz en el alquiler?", "en": "Is water / electricity included in the rent?", "tip": "💡 Critical to clarify before signing anything."},
-            {"es": "Necesito una copia del contrato.", "en": "I need a copy of the contract.", "tip": "💡 Always get everything in writing."},
-            {"es": "¿Cuándo se paga el alquiler?", "en": "When is rent due?", "tip": "💡 Usually the first of the month in Spain."},
-            {"es": "Los vecinos hacen mucho ruido.", "en": "The neighbours are making a lot of noise.", "tip": "💡 'Ruido' = noise. A very common complaint!"},
-            {"es": "¿Me puede devolver la fianza?", "en": "Can you return my deposit?", "tip": "💡 'Fianza' = deposit. Know your rights!"},
-            {"es": "Voy a llamar a un fontanero / electricista.", "en": "I'm going to call a plumber / electrician.", "tip": "💡 Useful if the landlord isn't responding."},
-        ],
-        "dialogues": {
-            "A1": [
-                {"speaker": "You",      "es": "Hola, hay un problema en el piso.", "en": "Hi, there's a problem in the flat."},
-                {"speaker": "Landlord", "es": "¿Qué pasa?", "en": "What's happening?"},
-                {"speaker": "You",      "es": "El grifo está roto.", "en": "The tap is broken."},
-                {"speaker": "Landlord", "es": "¿Desde cuándo?", "en": "Since when?"},
-                {"speaker": "You",      "es": "Desde ayer.", "en": "Since yesterday."},
-                {"speaker": "Landlord", "es": "Mando a alguien mañana.", "en": "I'll send someone tomorrow."},
-            ],
-            "A2": [
-                {"speaker": "You",      "es": "Hola, soy el/la inquilino/a del piso 3B.", "en": "Hi, I'm the tenant in flat 3B."},
-                {"speaker": "Landlord", "es": "Hola, ¿qué tal? ¿En qué puedo ayudarle?", "en": "Hi, how are you? How can I help you?"},
-                {"speaker": "You",      "es": "Hay un problema con la calefacción.", "en": "There's a problem with the heating."},
-                {"speaker": "Landlord", "es": "Lo siento. ¿Cuándo empezó?", "en": "I'm sorry. When did it start?"},
-                {"speaker": "You",      "es": "El lunes. ¿Cuándo puede mandar a alguien?", "en": "On Monday. When can you send someone?"},
-                {"speaker": "Landlord", "es": "Mañana por la mañana.", "en": "Tomorrow morning."},
-                {"speaker": "You",      "es": "¿A qué hora?", "en": "At what time?"},
-                {"speaker": "Landlord", "es": "Entre las nueve y las doce.", "en": "Between nine and twelve."},
-            ],
-            "B1": [
-                {"speaker": "You",      "es": "Hola, soy el/la inquilino/a del piso 3B.", "en": "Hi, I'm the tenant in flat 3B."},
-                {"speaker": "Landlord", "es": "Hola, ¿qué tal? ¿En qué puedo ayudarle?", "en": "Hi, how are you? How can I help you?"},
-                {"speaker": "You",      "es": "Hay un problema con la calefacción. Llevo tres días sin calor.", "en": "There's a problem with the heating. I've been without heat for three days."},
-                {"speaker": "Landlord", "es": "Vaya, lo siento. ¿Cuándo empezó el problema?", "en": "Oh dear, I'm sorry. When did the problem start?"},
-                {"speaker": "You",      "es": "El lunes por la noche dejó de funcionar.", "en": "Monday night it stopped working."},
-                {"speaker": "Landlord", "es": "Entiendo. Voy a mandar a un técnico mañana.", "en": "I understand. I'll send a technician tomorrow."},
-                {"speaker": "You",      "es": "¿A qué hora puede venir?", "en": "What time can they come?"},
-                {"speaker": "Landlord", "es": "Por la mañana, entre las nueve y las doce.", "en": "In the morning, between nine and twelve."},
-                {"speaker": "You",      "es": "Perfecto. ¿Puede confirmarme por mensaje?", "en": "Perfect. Can you confirm by message?"},
-                {"speaker": "Landlord", "es": "Sí, claro. Le mando un mensaje ahora mismo.", "en": "Yes, of course. I'll send you a message right now."},
-            ],
-        },
-    },
-    "general": {
-        "phrases": [
-            {"es": "¿Puede ayudarme, por favor?", "en": "Can you help me, please?", "tip": "💡 Works in absolutely any situation."},
-            {"es": "No entiendo. ¿Puede repetir más despacio?", "en": "I don't understand. Can you repeat more slowly?", "tip": "💡 Your most important survival phrase!"},
-            {"es": "¿Habla inglés?", "en": "Do you speak English?", "tip": "💡 A useful backup — but try Spanish first!"},
-            {"es": "¿Dónde está...?", "en": "Where is...?", "tip": "💡 Essential for navigation anywhere."},
-            {"es": "¿Cuánto cuesta?", "en": "How much does it cost?", "tip": "💡 Universal and always useful."},
-            {"es": "Por favor / Gracias / De nada.", "en": "Please / Thank you / You're welcome.", "tip": "💡 These three phrases open every door."},
-            {"es": "Buenos días / Buenas tardes / Buenas noches.", "en": "Good morning / Good afternoon / Good evening.", "tip": "💡 Always greet before asking for anything."},
-            {"es": "Disculpe, ¿me puede decir...?", "en": "Excuse me, could you tell me...?", "tip": "💡 Polite way to start any question."},
-            {"es": "Soy de... / No hablo español muy bien.", "en": "I'm from... / I don't speak Spanish very well.", "tip": "💡 Being upfront gets you more patience from locals."},
-            {"es": "¿Puede escribirlo, por favor?", "en": "Can you write it down, please?", "tip": "💡 Incredibly useful when you can't catch a word."},
-        ],
-        "dialogues": {
-            "A1": [
-                {"speaker": "Local", "es": "¡Hola! ¿Qué necesita?", "en": "Hi! What do you need?"},
-                {"speaker": "You",   "es": "Disculpe. No hablo español bien.", "en": "Excuse me. I don't speak Spanish well."},
-                {"speaker": "Local", "es": "No hay problema. ¿Qué busca?", "en": "No problem. What are you looking for?"},
-                {"speaker": "You",   "es": "¿Puede repetir despacio?", "en": "Can you repeat slowly?"},
-                {"speaker": "Local", "es": "Claro. Es por allí.", "en": "Of course. It's over there."},
-                {"speaker": "You",   "es": "Muchas gracias.", "en": "Thank you very much."},
-            ],
-            "A2": [
-                {"speaker": "Local", "es": "¡Hola! ¿En qué le puedo ayudar?", "en": "Hi! How can I help you?"},
-                {"speaker": "You",   "es": "Hola, disculpe. No hablo español muy bien.", "en": "Hi, excuse me. I don't speak Spanish very well."},
-                {"speaker": "Local", "es": "No hay problema, ¿qué necesita?", "en": "No problem, what do you need?"},
-                {"speaker": "You",   "es": "Busco... ¿Puede ayudarme?", "en": "I'm looking for... Can you help me?"},
-                {"speaker": "Local", "es": "Claro, con mucho gusto.", "en": "Of course, with pleasure."},
-                {"speaker": "You",   "es": "¿Puede repetir más despacio, por favor?", "en": "Can you repeat more slowly, please?"},
-                {"speaker": "Local", "es": "Sí, claro. Es por allí.", "en": "Yes, of course. It's over there."},
-                {"speaker": "You",   "es": "¿Puede escribirlo, por favor?", "en": "Can you write it down, please?"},
-            ],
-            "B1": [
-                {"speaker": "Local", "es": "¡Hola! ¿En qué le puedo ayudar?", "en": "Hi! How can I help you?"},
-                {"speaker": "You",   "es": "Hola, disculpe. No hablo español muy bien.", "en": "Hi, excuse me. I don't speak Spanish very well."},
-                {"speaker": "Local", "es": "No hay problema, ¿qué necesita?", "en": "No problem, what do you need?"},
-                {"speaker": "You",   "es": "Busco... ¿Puede ayudarme?", "en": "I'm looking for... Can you help me?"},
-                {"speaker": "Local", "es": "Claro, con mucho gusto.", "en": "Of course, with pleasure."},
-                {"speaker": "You",   "es": "¿Puede repetir más despacio, por favor?", "en": "Can you repeat more slowly, please?"},
-                {"speaker": "Local", "es": "Sí, claro. Es por allí.", "en": "Yes, of course. It's over there."},
-                {"speaker": "You",   "es": "¿Puede escribirlo, por favor?", "en": "Can you write it down, please?"},
-                {"speaker": "Local", "es": "Por supuesto.", "en": "Of course."},
-                {"speaker": "You",   "es": "Muchas gracias, muy amable.", "en": "Thank you very much, very kind of you."},
-            ],
-        },
-    },
-}
+# ── Level definitions ────────────────────────────────────────────────────────
 
 LEVEL_INFO = {
-    "A1 — Beginner":      {"code": "A1", "desc": "Basic greetings and numbers. Real conversations feel overwhelming.", "known_vocab": 300,  "color": "#58CC02"},
-    "A2 — Elementary":    {"code": "A2", "desc": "Simple transactions, but struggle with fast or complex speech.",   "known_vocab": 800,  "color": "#1CB0F6"},
-    "B1 — Intermediate":  {"code": "B1", "desc": "Manage most daily situations but miss nuance and idioms.",         "known_vocab": 2000, "color": "#FF9F1C"},
+    "A1 — Beginner":      {"code": "A1", "desc": "Basic greetings and numbers. Real conversations feel overwhelming.", "vocab": "Est. vocabulary: 300 words",   "known_vocab": 300,   "color": "#58CC02"},
+    "A2 — Elementary":    {"code": "A2", "desc": "Can handle simple transactions. Struggles with fast speech.",        "vocab": "Est. vocabulary: 1,000 words", "known_vocab": 1000,  "color": "#1CB0F6"},
+    "B1 — Intermediate":  {"code": "B1", "desc": "Can navigate most everyday situations with some effort.",            "vocab": "Est. vocabulary: 2,000 words", "known_vocab": 2000,  "color": "#FF9F1C"},
 }
 
 SCENARIO_LABELS = {
     "restaurant": "🍽️ Restaurant", "transport": "🚕 Transport",
     "shopping":   "🛍️ Shopping",   "hotel":     "🏨 Hotel",
     "health":     "🏥 Health",     "work":      "💼 Work",
-    "social":     "🥂 Social",     "housing":   "🏠 Housing",
+    "social":     "🎉 Social",     "housing":   "🏠 Housing",
     "general":    "🌍 General",
 }
 
-# ─────────────────────────────────────────────
-#  NLP HELPERS
-# ─────────────────────────────────────────────
+LEVEL_ORDER = ["A1", "A2", "B1"]
+
+PATTERN_LABELS = {
+    "present_simple":  "Present tense",
+    "basic_question":  "Basic question",
+    "greeting":        "Greeting",
+    "future":          "Future (ir + a)",
+    "polite_request":  "Polite request",
+    "negation":        "Negation",
+    "past_simple":     "Past tense",
+    "conditional":     "Conditional",
+    "subjunctive":     "Subjunctive",
+    "complex":         "Complex sentence",
+    "number":          "Numbers",
+}
+
+MODEL_PATTERN_LABELS = PATTERN_LABELS
 
 # ── TF-IDF scenario profiles ────────────────────────────────────────────────
 # Each scenario profile is a rich bag of words drawn from phrases, dialogues,
@@ -644,6 +230,12 @@ SCENARIO_PROFILES = {
         how much does this cost do you have my size can i try it on
         i will take it do you accept returns where is the checkout
         need a different size another color gift wrap receipt refund
+        salon beauty hair eyebrows nails threading waxing haircut hairdresser
+        peluquería cejas uñas depilación hilo corte pelo tinte manicura
+        beautician stylist barber blow dry trim highlights treatment spa
+        how much is a cut keep the same shape a little shorter same style
+        just a trim keep the shape make them neat tidy up clean up
+        asking price beauty treatment grooming appointment book a time
     """,
     "hotel": """
         noche habitación cama hotel servicio llave doble piso baño maleta
@@ -734,13 +326,14 @@ def get_match_confidence(user_text: str, matched_keys: list) -> dict:
 def build_scenario_data(matched_keys: list, user_level_code: str,
                         user_text: str = "") -> dict:
     primary_key = matched_keys[0] if matched_keys and matched_keys != ["general"] else "general"
-    base        = KNOWLEDGE_BASE[primary_key]
 
-    # Static fallbacks
-    fallback_phrases  = filter_phrases_by_level(base["phrases"], user_level_code)
-    fallback_dialogue = base["dialogues"][user_level_code]
+    # LLM-generated content — fallbacks are minimal emergency phrases
+    fallback_phrases  = [{"es": "Por favor, ¿puede ayudarme?", "en": "Please, can you help me?", "tip": "💡 Universal phrase when all else fails.", "level": "A1", "pattern": "polite_request"}]
+    fallback_dialogue = [
+        {"speaker": "Local",  "es": "¡Hola! ¿En qué puedo ayudarle?", "en": "Hello! How can I help you?"},
+        {"speaker": "You",    "es": "Hola, necesito ayuda, por favor.", "en": "Hello, I need help, please."},
+    ]
 
-    # LLM-generated content (with fallback on failure)
     with st.spinner("✨ Generating personalised phrases with AI..."):
         phrases = generate_phrases(
             user_scenario      = user_text,
@@ -1024,8 +617,8 @@ if st.session_state.scenario_submitted and st.session_state.scenario_text.strip(
             st.markdown(f"<div class='section-sub'>Filtered and ranked for <strong style='color:#f9fafb;'>{level}</strong></div>", unsafe_allow_html=True)
 
             for phrase in scenario_data["phrases"]:
-                plevel   = get_phrase_level(phrase["es"])
-                ppattern = get_phrase_pattern(phrase["es"])
+                plevel   = phrase.get('level', 'A1')
+                ppattern = PATTERN_LABELS.get(phrase.get('pattern', 'present_simple'), 'Present tense')
                 st.markdown(f"""
                 <div class='phrase-card'>
                     <div class='phrase-spanish'>{phrase["es"]}</div>
@@ -1148,13 +741,15 @@ if st.session_state.scenario_submitted and st.session_state.scenario_text.strip(
             # Record session once per scenario+level combination
             session_key = f"recorded_{hash(user_text)}_{user_level_code}"
             if not st.session_state.get(session_key):
-                from corpus_data import PHRASE_DIFFICULTY as PD
                 record_session(
                     scenario          = primary_key,
                     level             = user_level_code,
                     confidence_map    = st.session_state.confidence,
                     dialogue          = dialogue,
-                    phrase_pattern_fn = lambda es: PD.get(es, ("present_simple", "A2"))[0],
+                    phrase_pattern_fn = lambda es: next(
+                        (l.get("pattern", "present_simple") for l in dialogue if l["es"] == es),
+                        "present_simple"
+                    ),
                 )
                 st.session_state[session_key] = True
 
@@ -1248,8 +843,8 @@ if st.session_state.scenario_submitted and st.session_state.scenario_text.strip(
                 st.markdown("<hr style='border-color:#374151;margin:1.2rem 0;'>", unsafe_allow_html=True)
                 st.markdown(f"<div style='font-size:1rem;font-weight:800;color:#f9fafb;margin-bottom:0.8rem;'>⚠️ {len(struggled_lines)} phrases to focus on</div>", unsafe_allow_html=True)
                 for line in struggled_lines:
-                    pattern = get_phrase_pattern(line["es"])
-                    level_tag = get_phrase_level(line["es"])
+                    pattern = PATTERN_LABELS.get(line.get('pattern', 'present_simple'), 'Present tense')
+                    level_tag = line.get('level', 'A1')
                     st.markdown(f"""
                     <div class='kit-card' style='border-color:#e87c7c44;'>
                         <div style='display:flex;justify-content:space-between;align-items:flex-start;'>
@@ -1281,8 +876,8 @@ if st.session_state.scenario_submitted and st.session_state.scenario_text.strip(
 
             cols = st.columns(2)
             for i, phrase in enumerate(scenario_data["phrases"]):
-                plevel   = get_phrase_level(phrase["es"])
-                ppattern = get_phrase_pattern(phrase["es"])
+                plevel   = phrase.get('level', 'A1')
+                ppattern = PATTERN_LABELS.get(phrase.get('pattern', 'present_simple'), 'Present tense')
                 with cols[i % 2]:
                     st.markdown(f"""
                     <div class='kit-card'>
@@ -1300,11 +895,11 @@ if st.session_state.scenario_submitted and st.session_state.scenario_text.strip(
             if struggled_lines:
                 kit_text += "FOCUS PHRASES (you struggled with these):\n"
                 for line in struggled_lines:
-                    kit_text += f"  ES: {line['es']}\n  EN: {line['en']}\n  Pattern: {get_phrase_pattern(line['es'])}\n\n"
+                    kit_text += f"  ES: {line['es']}\n  EN: {line['en']}\n  Pattern: {PATTERN_LABELS.get(line.get('pattern', 'present_simple'), 'Present tense')}\n\n"
                 kit_text += "\nALL PHRASES:\n"
             for p in scenario_data["phrases"]:
-                plevel   = get_phrase_level(p["es"])
-                ppattern = get_phrase_pattern(p["es"])
+                plevel   = p.get('level', 'A1')
+                ppattern = PATTERN_LABELS.get(p.get('pattern', 'present_simple'), 'Present tense')
                 kit_text += f"[{plevel} · {ppattern}]\nES: {p['es']}\nEN: {p['en']}\n{p['tip']}\n\n"
 
             st.download_button(

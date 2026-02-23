@@ -25,6 +25,11 @@ from user_model import (
     clear_profile,
     PATTERN_LABELS as MODEL_PATTERN_LABELS,
 )
+from llm_generator import (
+    generate_phrases,
+    generate_dialogue,
+    generate_smart_recommendation,
+)
 
 # ─────────────────────────────────────────────
 #  PAGE CONFIG
@@ -726,27 +731,34 @@ def get_match_confidence(user_text: str, matched_keys: list) -> dict:
         for key in matched_keys
     }
 
-def build_scenario_data(matched_keys: list, user_level_code: str) -> dict:
-    if not matched_keys or matched_keys == ["general"]:
-        base = KNOWLEDGE_BASE["general"]
-        all_phrases = filter_phrases_by_level(base["phrases"], user_level_code)
-        dialogue = base["dialogues"][user_level_code]
-        return {"phrases": all_phrases, "dialogue": dialogue,
-                "primary_key": "general"}
+def build_scenario_data(matched_keys: list, user_level_code: str,
+                        user_text: str = "") -> dict:
+    primary_key = matched_keys[0] if matched_keys and matched_keys != ["general"] else "general"
+    base        = KNOWLEDGE_BASE[primary_key]
 
-    primary = KNOWLEDGE_BASE[matched_keys[0]]
-    merged = list(primary["phrases"])
-    if len(matched_keys) > 1:
-        existing = {p["es"] for p in merged}
-        for p in KNOWLEDGE_BASE[matched_keys[1]]["phrases"][:3]:
-            if p["es"] not in existing:
-                merged.append(p)
+    # Static fallbacks
+    fallback_phrases  = filter_phrases_by_level(base["phrases"], user_level_code)
+    fallback_dialogue = base["dialogues"][user_level_code]
 
-    filtered = filter_phrases_by_level(merged, user_level_code)
-    dialogue = primary["dialogues"][user_level_code]
+    # LLM-generated content (with fallback on failure)
+    with st.spinner("✨ Generating personalised phrases with AI..."):
+        phrases = generate_phrases(
+            user_scenario      = user_text,
+            scenario_category  = primary_key,
+            level_code         = user_level_code,
+            fallback_phrases   = fallback_phrases,
+        )
 
-    return {"phrases": filtered, "dialogue": dialogue,
-            "primary_key": matched_keys[0]}
+    with st.spinner("✨ Building your practice dialogue..."):
+        dialogue = generate_dialogue(
+            user_scenario      = user_text,
+            scenario_category  = primary_key,
+            level_code         = user_level_code,
+            fallback_dialogue  = fallback_dialogue,
+        )
+
+    return {"phrases": phrases, "dialogue": dialogue,
+            "primary_key": primary_key}
 
 def extract_keywords(user_text: str) -> list:
     stopwords = {"i", "a", "the", "to", "in", "at", "my", "me", "and", "for", "with",
@@ -900,7 +912,7 @@ if st.session_state.scenario_submitted and st.session_state.scenario_text.strip(
     user_text       = st.session_state.scenario_text
     matched_keys    = detect_scenarios(user_text)
     confidences     = get_match_confidence(user_text, matched_keys)
-    scenario_data   = build_scenario_data(matched_keys, user_level_code)
+    scenario_data   = build_scenario_data(matched_keys, user_level_code, user_text)
     detected_words  = extract_keywords(user_text)
     primary_key     = scenario_data["primary_key"]
 
@@ -1149,7 +1161,16 @@ if st.session_state.scenario_submitted and st.session_state.scenario_text.strip(
             strengths,   weaknesses   = get_strengths_and_weaknesses()
             predicted                  = get_predicted_readiness(primary_key, user_level_code)
             session_count              = get_session_count()
-            recommendation             = get_recommended_focus()
+            fallback_rec               = get_recommended_focus()
+            profile                    = __import__("user_model")._load_profile()
+            with st.spinner("🤖 Generating personalised recommendation..."):
+                recommendation = generate_smart_recommendation(
+                    struggled_phrases = [{"es": l["es"], "en": l["en"]} for l in struggled_lines],
+                    pattern_stats     = profile.get("pattern_stats", {}),
+                    scenario          = primary_key,
+                    level_code        = user_level_code,
+                    fallback          = fallback_rec,
+                )
 
             col_score, col_model = st.columns([1, 1], gap="large")
 

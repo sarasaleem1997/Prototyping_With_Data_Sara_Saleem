@@ -221,7 +221,127 @@ Write a SHORT (2-3 sentences max), specific, actionable recommendation.
     return fallback
 
 
-# ── Helper ───────────────────────────────────────────────────────────────────
+
+# ── Conversation chat ─────────────────────────────────────────────────────────
+
+def build_conversation_system_prompt(scenario_category: str, user_scenario: str,
+                                      level_code: str, weak_patterns: list) -> str:
+    """Build the system prompt for the conversation practice chatbot."""
+    role       = _get_other_speaker(scenario_category)
+    level_desc = LEVEL_DESCRIPTIONS.get(level_code, LEVEL_DESCRIPTIONS["A1"])
+    weak_text  = ", ".join([p["label"] for p in weak_patterns[:3]]) if weak_patterns else "none identified yet"
+
+    return f"""You are playing the role of a {role} in Spain. The user is a Spanish learner practising a real conversation.
+
+Their situation: "{user_scenario}"
+Their level: {level_code} — {level_desc}
+Their weak grammar patterns: {weak_text}
+
+Your rules:
+1. ALWAYS respond in Spanish. Keep your Spanish complexity appropriate for a {level_code} learner.
+2. After your Spanish response, add a line break and then an English translation in parentheses like: (Translation: ...)
+3. If the user writes in English, respond ONLY with: "¡En español, por favor! Try to say it in Spanish. 💪" — do not answer their question until they try in Spanish.
+4. If the user makes a grammar mistake, gently correct it at the end of your response in a friendly way.
+5. Naturally steer the conversation so the user needs to use: {weak_text}. Do not force it unnaturally.
+6. Stay in character as a {role} at all times. Keep the conversation realistic and grounded in: "{user_scenario}".
+7. Keep your responses concise — 1 to 3 sentences maximum.
+8. Return your response as a JSON object with two fields: "spanish" and "english". 
+   Example: {{"spanish": "¡Buenas tardes! ¿En qué puedo ayudarle?", "english": "Good afternoon! How can I help you?"}}
+   Only return the JSON, nothing else."""
+
+
+def chat_with_local(chat_history: list, user_message: str,
+                    system_prompt: str) -> dict:
+    """
+    Send a user message and chat history to Gemini.
+    Returns dict with 'spanish' and 'english' keys.
+    Falls back to a safe default on error.
+    """
+    client = _get_gemini_client()
+    if client is None:
+        return {"spanish": "Lo siento, hay un problema técnico.", "english": "Sorry, there is a technical problem."}
+
+    # Build contents list — system prompt as first user turn (Gemini style)
+    contents = [{"role": "user",  "parts": [{"text": system_prompt}]},
+                {"role": "model", "parts": [{"text": '{"spanish": "¡Hola! ¿En qué puedo ayudarle?", "english": "Hello! How can I help you?"}'}]}]
+
+    for msg in chat_history:
+        contents.append({
+            "role":  "user" if msg["role"] == "user" else "model",
+            "parts": [{"text": msg["content"]}]
+        })
+
+    contents.append({"role": "user", "parts": [{"text": user_message}]})
+
+    try:
+        response = client.models.generate_content(model=MODEL, contents=contents)
+        text = response.text.strip()
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+        parsed = json.loads(text.strip())
+        if "spanish" in parsed and "english" in parsed:
+            return parsed
+    except Exception as e:
+        pass
+
+    return {"spanish": "No entiendo. ¿Puede repetir?", "english": "I don't understand. Can you repeat?"}
+
+
+def generate_conversation_feedback(chat_history: list, scenario: str,
+                                    level_code: str, weak_patterns: list) -> dict:
+    """
+    Analyse the full conversation and return structured feedback.
+    Returns dict with: score (int), summary, strengths, improvements, next_focus
+    """
+    client = _get_gemini_client()
+    if client is None:
+        return None
+
+    if len(chat_history) < 2:
+        return None
+
+    conversation_text = "\n".join([
+        f"{'User' if m['role'] == 'user' else 'AI'}: {m['content']}"
+        for m in chat_history
+    ])
+
+    weak_text = ", ".join([p["label"] for p in weak_patterns[:3]]) if weak_patterns else "none"
+
+    prompt = f"""You are a Spanish language tutor analysing a practice conversation.
+
+Scenario: {scenario}
+Learner level: {level_code}
+Known weak patterns: {weak_text}
+
+Conversation transcript:
+{conversation_text}
+
+Analyse the learner's Spanish and return ONLY a JSON object with these exact fields:
+- "score": integer from 0 to 100
+- "summary": 1 sentence overall assessment
+- "strengths": list of 2 strings describing what they did well
+- "improvements": list of 2 strings describing specific mistakes or areas to improve (reference actual phrases they used)
+- "next_focus": 1 actionable string — the single most important thing to practise before their next conversation
+
+Return only the JSON, no markdown, no explanation."""
+
+    try:
+        response = client.models.generate_content(model=MODEL, contents=prompt)
+        text = response.text.strip()
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+        parsed = json.loads(text.strip())
+        if "score" in parsed and "summary" in parsed:
+            return parsed
+    except Exception:
+        pass
+
+    return None
+
 
 def _get_other_speaker(scenario_category: str) -> str:
     speakers = {

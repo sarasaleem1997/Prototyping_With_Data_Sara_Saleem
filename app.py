@@ -3,6 +3,7 @@ import plotly.graph_objects as go
 import re
 import sys
 import os
+import json
 
 # ── Import corpus data and user model (same directory) ─────────────────────
 sys.path.insert(0, os.path.dirname(__file__))
@@ -20,6 +21,9 @@ from llm_generator import (
     generate_phrases,
     generate_dialogue,
     generate_smart_recommendation,
+    build_conversation_system_prompt,
+    chat_with_local,
+    generate_conversation_feedback,
 )
 
 # ─────────────────────────────────────────────
@@ -369,6 +373,12 @@ if "scenario_text" not in st.session_state:
     st.session_state.scenario_text = ""
 if "scenario_submitted" not in st.session_state:
     st.session_state.scenario_submitted = False
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+if "conversation_feedback" not in st.session_state:
+    st.session_state.conversation_feedback = None
+if "conv_system_prompt" not in st.session_state:
+    st.session_state.conv_system_prompt = ""
 
 # ─────────────────────────────────────────────
 #  SIDEBAR
@@ -470,6 +480,107 @@ with st.sidebar:
             clear_profile()
             st.rerun()
 
+        # ── Progress Dashboard ────────────────────────────────────────────
+        st.markdown("<hr style='border-color:#374151;margin:1rem 0;'>", unsafe_allow_html=True)
+        with st.expander("📈 Progress Dashboard", expanded=False):
+            profile_data   = __import__("user_model")._load_profile()
+            sessions_list  = profile_data.get("sessions", [])
+            scenario_stats = profile_data.get("scenario_stats", {})
+            pattern_stats  = profile_data.get("pattern_stats", {})
+
+            if not sessions_list:
+                st.markdown("<div style='color:#6b7280;font-size:0.8rem;'>Complete a practice session to see your progress here.</div>", unsafe_allow_html=True)
+            else:
+                # ── Stat pills ──────────────────────────────────────────
+                total_scenarios = len(scenario_stats)
+                avg_readiness   = int(sum(s["readiness"] for s in sessions_list) / len(sessions_list))
+                st.markdown(f"""
+                <div style='display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.4rem;margin-bottom:0.8rem;'>
+                    <div style='background:#111827;border-radius:8px;padding:0.5rem;text-align:center;'>
+                        <div style='font-size:1.1rem;font-weight:900;color:#58CC02;font-family:Nunito,sans-serif;'>{len(sessions_list)}</div>
+                        <div style='font-size:0.6rem;color:#9ca3af;'>Sessions</div>
+                    </div>
+                    <div style='background:#111827;border-radius:8px;padding:0.5rem;text-align:center;'>
+                        <div style='font-size:1.1rem;font-weight:900;color:#1CB0F6;font-family:Nunito,sans-serif;'>{total_scenarios}</div>
+                        <div style='font-size:0.6rem;color:#9ca3af;'>Scenarios</div>
+                    </div>
+                    <div style='background:#111827;border-radius:8px;padding:0.5rem;text-align:center;'>
+                        <div style='font-size:1.1rem;font-weight:900;color:#FF9F1C;font-family:Nunito,sans-serif;'>{avg_readiness}%</div>
+                        <div style='font-size:0.6rem;color:#9ca3af;'>Avg Ready</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # ── Readiness over time line chart ───────────────────────
+                if len(sessions_list) >= 2:
+                    st.markdown("<div style='font-size:0.7rem;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.3rem;'>Readiness over time</div>", unsafe_allow_html=True)
+                    dates     = [s["timestamp"][:10] for s in sessions_list]
+                    readiness_vals = [s["readiness"] for s in sessions_list]
+                    fig_line = go.Figure()
+                    fig_line.add_trace(go.Scatter(
+                        x=list(range(1, len(sessions_list)+1)),
+                        y=readiness_vals,
+                        mode="lines+markers",
+                        line=dict(color="#58CC02", width=2),
+                        marker=dict(size=6, color="#58CC02"),
+                        hovertemplate="Session %{x}<br>%{y}% ready<br>" +
+                                      "<extra></extra>",
+                    ))
+                    fig_line.update_layout(
+                        height=140, margin=dict(l=0, r=0, t=4, b=0),
+                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                        xaxis=dict(showgrid=False, color="#6b7280", tickfont=dict(size=9)),
+                        yaxis=dict(showgrid=True, gridcolor="#374151", color="#6b7280",
+                                   tickfont=dict(size=9), range=[0, 105]),
+                        showlegend=False,
+                    )
+                    st.plotly_chart(fig_line, use_container_width=True, config={"displayModeBar": False})
+
+                # ── Scenarios bar chart ──────────────────────────────────
+                if scenario_stats:
+                    st.markdown("<div style='font-size:0.7rem;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.3rem;'>Scenarios practised</div>", unsafe_allow_html=True)
+                    sc_labels = [SCENARIO_LABELS.get(k, k).split(" ")[1] if " " in SCENARIO_LABELS.get(k, k) else k for k in scenario_stats]
+                    sc_counts = [v["sessions"] for v in scenario_stats.values()]
+                    sc_ready  = [v["avg_readiness"] for v in scenario_stats.values()]
+                    fig_bar = go.Figure()
+                    fig_bar.add_trace(go.Bar(
+                        x=sc_labels, y=sc_counts,
+                        marker_color="#1CB0F6",
+                        hovertemplate="%{x}<br>%{y} session(s)<extra></extra>",
+                    ))
+                    fig_bar.update_layout(
+                        height=130, margin=dict(l=0, r=0, t=4, b=0),
+                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                        xaxis=dict(showgrid=False, color="#6b7280", tickfont=dict(size=9)),
+                        yaxis=dict(showgrid=True, gridcolor="#374151", color="#6b7280",
+                                   tickfont=dict(size=9)),
+                        showlegend=False,
+                    )
+                    st.plotly_chart(fig_bar, use_container_width=True, config={"displayModeBar": False})
+
+                # ── Grammar pattern breakdown ────────────────────────────
+                if pattern_stats:
+                    st.markdown("<div style='font-size:0.7rem;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.4rem;'>Grammar patterns</div>", unsafe_allow_html=True)
+                    for pattern, counts in sorted(pattern_stats.items(),
+                                                   key=lambda x: x[1]["confident"] + x[1]["struggled"],
+                                                   reverse=True)[:6]:
+                        total  = counts["confident"] + counts["struggled"]
+                        rate   = counts["confident"] / total if total else 0
+                        label  = PATTERN_LABELS.get(pattern, pattern)
+                        color  = "#58CC02" if rate >= 0.7 else "#FF9F1C" if rate >= 0.4 else "#EF4444"
+                        pct    = int(rate * 100)
+                        st.markdown(f"""
+                        <div style='margin-bottom:0.5rem;'>
+                            <div style='display:flex;justify-content:space-between;margin-bottom:0.2rem;'>
+                                <span style='font-size:0.7rem;color:#f9fafb;'>{label}</span>
+                                <span style='font-size:0.7rem;color:{color};font-weight:700;'>{pct}%</span>
+                            </div>
+                            <div style='background:#374151;border-radius:4px;height:5px;'>
+                                <div style='background:{color};width:{pct}%;height:5px;border-radius:4px;'></div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
 # ─────────────────────────────────────────────
 #  MAIN
 # ─────────────────────────────────────────────
@@ -496,6 +607,9 @@ if st.button("✨ Analyse my scenario", use_container_width=True):
         st.session_state.scenario_text = user_input
         st.session_state.scenario_submitted = True
         st.session_state.confidence = {}
+        st.session_state.chat_history = []
+        st.session_state.conversation_feedback = None
+        st.session_state.conv_system_prompt = ""
         st.rerun()
 
 # ─────────────────────────────────────────────
@@ -504,10 +618,15 @@ if st.button("✨ Analyse my scenario", use_container_width=True):
 if st.session_state.scenario_submitted and st.session_state.scenario_text.strip():
     user_text       = st.session_state.scenario_text
     matched_keys    = detect_scenarios(user_text)
-    confidences     = get_match_confidence(user_text, matched_keys)
-    scenario_data   = build_scenario_data(matched_keys, user_level_code, user_text)
-    detected_words  = extract_keywords(user_text)
-    primary_key     = scenario_data["primary_key"]
+    confidences    = get_match_confidence(user_text, matched_keys)
+    detected_words = extract_keywords(user_text)
+
+    # Cache scenario_data so Gemini is NOT called on every button click rerun
+    cache_key = f"scenario_data_{user_text}_{user_level_code}"
+    if cache_key not in st.session_state:
+        st.session_state[cache_key] = build_scenario_data(matched_keys, user_level_code, user_text)
+    scenario_data = st.session_state[cache_key]
+    primary_key   = scenario_data["primary_key"]
 
     st.markdown("<hr style='border-color:#374151;margin:1.5rem 0;'>", unsafe_allow_html=True)
 
@@ -549,7 +668,7 @@ if st.session_state.scenario_submitted and st.session_state.scenario_text.strip(
 
     st.markdown("<div style='margin-top:1.5rem;'></div>", unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["📊 Scenario Analysis", "🗣️ Practice Dialogue", "🎯 My Survival Kit"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 Scenario Analysis", "🗣️ Practice Dialogue", "🎯 My Survival Kit", "💬 Conversation Practice"])
 
     # ── TAB 1 ──────────────────────────────────
     with tab1:
@@ -661,11 +780,9 @@ if st.session_state.scenario_submitted and st.session_state.scenario_text.strip(
                     with cy:
                         if st.button("✅ I know this", key=f"yes_{i}", use_container_width=True):
                             st.session_state.confidence[key] = "✅"
-                            st.rerun()
                     with cn:
                         if st.button("❌ I'd struggle", key=f"no_{i}", use_container_width=True):
                             st.session_state.confidence[key] = "❌"
-                            st.rerun()
                     if current:
                         cc = "#FF9F1C" if current == "✅" else "#e87c7c"
                         label = "I know this ✅" if current == "✅" else "I'd struggle ❌"
@@ -793,7 +910,7 @@ if st.session_state.scenario_submitted and st.session_state.scenario_text.strip(
             with col_model:
                 from user_model import get_pattern_performance
                 perf = get_pattern_performance()
-                if perf and len(perf) >= 2:
+                if perf:
                     labels = [v["label"] for v in perf.values()]
                     rates  = [int(v["rate"] * 100) for v in perf.values()]
                     colors = ["#58CC02" if r >= 70 else "#FF9F1C" if r >= 40 else "#e87c7c" for r in rates]
@@ -818,7 +935,7 @@ if st.session_state.scenario_submitted and st.session_state.scenario_text.strip(
                     <div style='background:#1f2937;border:1px solid #374151;border-radius:12px;
                                 padding:1.2rem;text-align:center;margin-top:0.5rem;'>
                         <div style='font-size:1.5rem;margin-bottom:0.5rem;'>📊</div>
-                        <div style='font-size:0.85rem;color:#9ca3af;'>Complete more sessions to<br>build your grammar profile</div>
+                        <div style='font-size:0.85rem;color:#9ca3af;'>Mark confidence on dialogue lines<br>to build your grammar profile</div>
                         <div style='font-size:0.75rem;color:#58CC02;margin-top:0.5rem;font-weight:700;'>
                             {session_count} session{"s" if session_count != 1 else ""} recorded so far
                         </div>
@@ -909,6 +1026,167 @@ if st.session_state.scenario_submitted and st.session_state.scenario_text.strip(
                 mime="text/plain",
                 use_container_width=True,
             )
+
+    # ── TAB 4 ──────────────────────────────────
+    with tab4:
+
+        # Build system prompt once per scenario
+        if not st.session_state.conv_system_prompt:
+            _, weaknesses = get_strengths_and_weaknesses()
+            st.session_state.conv_system_prompt = build_conversation_system_prompt(
+                scenario_category = primary_key,
+                user_scenario     = user_text,
+                level_code        = user_level_code,
+                weak_patterns     = weaknesses,
+            )
+
+        role_name = {
+            "restaurant": "Waiter", "transport": "Driver", "shopping": "Shop Assistant",
+            "hotel": "Receptionist", "health": "Doctor", "work": "Colleague",
+            "social": "Friend", "housing": "Landlord", "general": "Local",
+        }.get(primary_key, "Local")
+
+        # Header
+        st.markdown(f"""
+        <div style='background:linear-gradient(135deg,#1f2937,#111827);border:1px solid #374151;
+                    border-radius:16px;padding:1.2rem 1.5rem;margin-bottom:1.2rem;'>
+            <div style='font-size:0.75rem;color:#58CC02;text-transform:uppercase;
+                        letter-spacing:0.1em;font-weight:800;margin-bottom:0.3rem;'>
+                💬 Live Conversation Practice
+            </div>
+            <div style='color:#f9fafb;font-size:0.95rem;line-height:1.6;'>
+                You're speaking with a <strong>{role_name}</strong> in Spain.
+                Type in <strong>Spanish only</strong> — the {role_name} will respond in Spanish
+                with an English translation. When you're done, click <em>Finish & Get Feedback</em>.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Show conversation feedback if available
+        if st.session_state.conversation_feedback:
+            fb = st.session_state.conversation_feedback
+            score     = fb.get("score", 0)
+            s_color   = "#58CC02" if score >= 70 else "#FF9F1C" if score >= 40 else "#EF4444"
+
+            st.markdown(f"""
+            <div style='background:#1f2937;border:2px solid {s_color};border-radius:16px;
+                        padding:1.5rem;margin-bottom:1.5rem;'>
+                <div style='font-size:0.75rem;color:{s_color};text-transform:uppercase;
+                            letter-spacing:0.1em;font-weight:800;margin-bottom:0.8rem;'>
+                    🏆 Conversation Report
+                </div>
+                <div style='display:flex;align-items:center;gap:1.5rem;margin-bottom:1rem;'>
+                    <div style='font-size:3rem;font-weight:900;color:{s_color};font-family:Nunito,sans-serif;'>
+                        {score}
+                    </div>
+                    <div style='color:#f9fafb;font-size:0.95rem;line-height:1.6;'>
+                        {fb.get("summary", "")}
+                    </div>
+                </div>
+                <div style='display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;'>
+                    <div style='background:#111827;border-radius:10px;padding:0.8rem;'>
+                        <div style='color:#58CC02;font-size:0.75rem;font-weight:800;
+                                    text-transform:uppercase;margin-bottom:0.5rem;'>✅ Strengths</div>
+                        {"".join([f"<div style='color:#d1fae5;font-size:0.85rem;margin-bottom:0.3rem;'>• {s}</div>" for s in fb.get("strengths", [])])}
+                    </div>
+                    <div style='background:#111827;border-radius:10px;padding:0.8rem;'>
+                        <div style='color:#FF9F1C;font-size:0.75rem;font-weight:800;
+                                    text-transform:uppercase;margin-bottom:0.5rem;'>⚠️ To Improve</div>
+                        {"".join([f"<div style='color:#fef3c7;font-size:0.85rem;margin-bottom:0.3rem;'>• {i}</div>" for i in fb.get("improvements", [])])}
+                    </div>
+                </div>
+                <div style='background:#111827;border-radius:10px;padding:0.8rem;'>
+                    <div style='color:#1CB0F6;font-size:0.75rem;font-weight:800;
+                                text-transform:uppercase;margin-bottom:0.4rem;'>🎯 Next Focus</div>
+                    <div style='color:#bfdbfe;font-size:0.85rem;'>{fb.get("next_focus", "")}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            if st.button("🔄 Start New Conversation", use_container_width=True, key="reset_conv"):
+                st.session_state.chat_history = []
+                st.session_state.conversation_feedback = None
+                st.rerun()
+
+        else:
+            # Chat history display
+            if not st.session_state.chat_history:
+                st.markdown("""
+                <div style='text-align:center;padding:2rem;color:#6b7280;font-size:0.9rem;'>
+                    Start the conversation by typing your first message in Spanish below 👇
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                for msg in st.session_state.chat_history:
+                    if msg["role"] == "user":
+                        st.markdown(f"""
+                        <div style='display:flex;justify-content:flex-end;margin-bottom:0.8rem;'>
+                            <div style='background:#1d4ed8;color:#f9fafb;border-radius:16px 16px 4px 16px;
+                                        padding:0.8rem 1.1rem;max-width:75%;font-size:0.9rem;line-height:1.5;'>
+                                {msg["content"]}
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        # Parse stored response
+                        try:
+                            resp = json.loads(msg["content"])
+                            spanish = resp.get("spanish", msg["content"])
+                            english = resp.get("english", "")
+                        except Exception:
+                            spanish = msg["content"]
+                            english = ""
+                        st.markdown(f"""
+                        <div style='display:flex;justify-content:flex-start;margin-bottom:0.8rem;'>
+                            <div style='background:#1f2937;border:1px solid #374151;color:#f9fafb;
+                                        border-radius:16px 16px 16px 4px;padding:0.8rem 1.1rem;
+                                        max-width:75%;font-size:0.9rem;line-height:1.5;'>
+                                <div style='font-weight:700;margin-bottom:0.3rem;'>{spanish}</div>
+                                <div style='color:#9ca3af;font-size:0.8rem;font-style:italic;'>{english}</div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+            # Input area
+            user_chat_input = st.text_input(
+                "Your message (in Spanish)",
+                placeholder="Escribe en español...",
+                key="chat_input",
+                label_visibility="collapsed",
+            )
+
+            col_send, col_finish = st.columns([3, 2])
+            with col_send:
+                if st.button("📤 Send", use_container_width=True, key="send_msg"):
+                    if user_chat_input.strip():
+                        with st.spinner("💬 Responding..."):
+                            response = chat_with_local(
+                                chat_history  = st.session_state.chat_history,
+                                user_message  = user_chat_input.strip(),
+                                system_prompt = st.session_state.conv_system_prompt,
+                            )
+                        st.session_state.chat_history.append(
+                            {"role": "user", "content": user_chat_input.strip()})
+                        st.session_state.chat_history.append(
+                            {"role": "assistant", "content": json.dumps(response)})
+                        st.rerun()
+
+            with col_finish:
+                if st.button("🏁 Finish & Get Feedback", use_container_width=True, key="finish_conv"):
+                    if len(st.session_state.chat_history) >= 2:
+                        _, weaknesses = get_strengths_and_weaknesses()
+                        with st.spinner("🤖 Analysing your conversation..."):
+                            feedback = generate_conversation_feedback(
+                                chat_history  = st.session_state.chat_history,
+                                scenario      = user_text,
+                                level_code    = user_level_code,
+                                weak_patterns = weaknesses,
+                            )
+                        if feedback:
+                            st.session_state.conversation_feedback = feedback
+                            st.rerun()
+                    else:
+                        st.warning("Have at least one exchange before getting feedback.")
 
 else:
     st.markdown("""
